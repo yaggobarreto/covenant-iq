@@ -2,52 +2,52 @@
 
 # CovenantIQ
 
-**AI-powered covenant compliance & credit portfolio intelligence.**
-Reads loan and credit agreements with an LLM, tracks financial covenants against borrower statements over time, and answers portfolio questions in natural language — grounded in the original documents.
+**Inteligência de compliance de covenants e de carteira de crédito, com IA.**
+Lê contratos de crédito com um LLM, acompanha covenants financeiros em relação aos demonstrativos do tomador ao longo do tempo, e responde perguntas sobre a carteira em linguagem natural — sempre com base nos documentos originais.
 
-[![Status](https://img.shields.io/badge/status-early--stage%20portfolio%20project-c8862f)](#roadmap)
-[![Python](https://img.shields.io/badge/python-3.11%2B-1e2a44)](#tech-stack)
-[![LangChain](https://img.shields.io/badge/LLM%20orchestration-LangChain-1f9d76)](#the-extraction-pipeline)
-[![License](https://img.shields.io/badge/license-MIT-4c5266)](#license)
+[![Status](https://img.shields.io/badge/status-projeto%20de%20portf%C3%B3lio%20em%20est%C3%A1gio%20inicial-c8862f)](#roteiro)
+[![Python](https://img.shields.io/badge/python-3.11%2B-1e2a44)](#stack-t%C3%A9cnica)
+[![LangChain](https://img.shields.io/badge/orquestra%C3%A7%C3%A3o%20de%20LLM-LangChain-1f9d76)](#o-pipeline-de-extra%C3%A7%C3%A3o)
+[![License](https://img.shields.io/badge/licen%C3%A7a-MIT-4c5266)](#licen%C3%A7a)
 
-[Whitepaper (PDF)](docs/whitepaper.pdf) · [Architecture](#architecture) · [Roadmap](#roadmap)
+[Whitepaper (PDF)](docs/whitepaper.pdf) · [Arquitetura](#arquitetura) · [Roteiro](#roteiro)
 
 </div>
 
-> **Portfolio project, synthetic data only.** Every figure, borrower name, and document referenced in this repository is generated for demonstration purposes. CovenantIQ is not affiliated with, and does not process data from, any real financial institution, lender, or client.
+> **Projeto de portfólio, com dados 100% sintéticos.** Todo número, nome de tomador e documento citado neste repositório foi gerado para fins de demonstração. O CovenantIQ não tem nenhuma relação com, e não processa dados de, nenhuma instituição financeira, credor ou cliente real.
 
-<img src="docs/dashboard.png" alt="CovenantIQ portfolio dashboard — loan list with covenant status and headroom trend chart" width="100%">
+<img src="docs/dashboard.png" alt="Painel de carteira do CovenantIQ — lista de contratos com status de covenant e gráfico de tendência de folga" width="100%">
 
 ---
 
-## The problem
+## O problema
 
-Every credit agreement a lender signs — a term loan, a debenture, a revolving facility — comes with **financial covenants**: contractual thresholds the borrower must keep meeting, like a maximum Net Debt / EBITDA ratio, a minimum liquidity balance, or a minimum debt-service coverage ratio.
+Todo contrato de crédito que um credor assina — um empréstimo a prazo, uma debênture, uma linha rotativa — vem com **covenants financeiros**: limites contratuais que o tomador precisa manter, como uma alavancagem máxima (Dívida Líquida/EBITDA), um saldo mínimo de liquidez, ou um índice mínimo de cobertura do serviço da dívida.
 
-In most credit funds and bank portfolios, checking these covenants is still manual: an analyst re-reads the agreement to recall the exact definition and threshold, then cross-references it against whatever financial statement the borrower sent that quarter. Across a portfolio of fifty or a hundred loans, this doesn't scale — and it means breaches are often caught **after** the fact, instead of as a trend the moment a borrower's headroom starts shrinking.
+Na maioria dos fundos e carteiras de crédito, checar esses covenants ainda é manual: um analista relê o contrato pra lembrar a definição e o limite exatos, depois cruza isso na mão com o demonstrativo financeiro que o tomador mandou naquele trimestre. Numa carteira de cinquenta ou cem contratos, isso não escala — e o resultado é que a quebra de covenant costuma ser percebida **depois** do fato, em vez de aparecer como uma tendência no momento em que a folga do tomador começa a encolher.
 
-CovenantIQ is a proof-of-concept for the other approach: read the legal document once with an LLM to get a structured, queryable definition of every covenant, then feed financial data into that structure continuously so breaches — and early warning signs — surface automatically.
+O CovenantIQ é uma prova de conceito pra inverter essa lógica: ler o documento jurídico uma vez com um LLM pra obter uma definição estruturada e consultável de cada covenant, e então alimentar essa estrutura continuamente com os dados financeiros, pra que quebras — e sinais de alerta antecipado — apareçam sozinhos.
 
-## What it does
+## O que o sistema faz
 
 | | |
 |---|---|
-| **Extract** | Upload a credit agreement PDF. A LangChain extraction chain pulls parties, principal, rate, maturity, and every financial covenant as a structured, typed definition (metric, operator, threshold, test frequency, cure period). |
-| **Monitor** | Each time a borrower's financial statement comes in, a second extraction pass pulls the line items each covenant needs, computes the actual ratio, and stores a dated compliance snapshot — not just pass/fail, but how much headroom is left. |
-| **Visualize** | A dashboard rolls every loan's covenant status into one portfolio view: what's compliant, what's in warning range, what's breached, and whose headroom has been shrinking quarter over quarter. |
-| **Ask** | A retrieval-augmented chat answers questions like *"which loans have a leverage covenant with less than 10% headroom?"* — grounded in the actual agreement text, with a citation back to the source page. |
+| **Extrair** | Envie o PDF do contrato de crédito. Uma chain de extração do LangChain identifica as partes, o principal, a taxa, o vencimento e cada covenant financeiro como uma definição estruturada e tipada (métrica, operador, limite, frequência de teste, prazo de cura). |
+| **Monitorar** | A cada demonstrativo financeiro que chega, uma segunda extração pega os itens contábeis que cada covenant precisa, calcula o índice real e grava um retrato de conformidade datado — não só aprovado/reprovado, mas quanta folga ainda resta. |
+| **Visualizar** | Um painel consolida o status de covenant de cada contrato numa visão só de carteira: o que está em dia, o que está em alerta, o que quebrou, e de quem a folga vem encolhendo trimestre após trimestre. |
+| **Perguntar** | Um chat com busca aumentada (RAG) responde perguntas como *"quais contratos têm um covenant de alavancagem com menos de 10% de folga?"* — sempre com base no texto real do contrato, com a citação da página de origem. |
 
-## Architecture
+## Arquitetura
 
-Two ingestion paths feed the same store: the agreement (read once, rarely changes) and the financial statements (read every reporting period). The compliance engine and the portfolio chat both read from that store.
+Duas entradas de dados alimentam o mesmo repositório: o contrato (lido uma vez, muda raramente) e os demonstrativos financeiros (lidos a cada período). Tanto o motor de compliance quanto o chat da carteira leem desse mesmo repositório.
 
-<img src="docs/architecture.png" alt="CovenantIQ architecture diagram: agreement and financial-statement ingestion through LangChain extraction chains, into PostgreSQL and a pgvector store, feeding the compliance engine, dashboard, alerts, and RAG chat" width="100%">
+<img src="docs/architecture.png" alt="Diagrama de arquitetura do CovenantIQ: ingestão do contrato e dos demonstrativos financeiros por chains de extração do LangChain, gravação no PostgreSQL e num repositório vetorial (pgvector), alimentando o motor de compliance, o painel, os alertas e o chat com RAG" width="100%">
 
-## The extraction pipeline
+## O pipeline de extração
 
-The hardest part of this project isn't calling an LLM — it's getting a covenant definition out of dense legal prose as something a program can actually test later.
+A parte mais difícil deste projeto não é chamar um LLM — é transformar a definição de um covenant, escrita em texto jurídico denso, em algo que um programa consiga testar depois.
 
-**Structured output, not free text.** Every extraction call uses LangChain's `with_structured_output()` bound to a Pydantic model, so the response is validated against a schema before it ever reaches the database — a malformed covenant (missing threshold, ambiguous operator) fails loudly at extraction time, not three months later when the engine tries to test it.
+**Saída estruturada, não texto livre.** Toda chamada de extração usa o `with_structured_output()` do LangChain, vinculado a um modelo Pydantic, então a resposta é validada contra um schema antes de chegar ao banco — um covenant malformado (sem limite, com operador ambíguo) falha de forma clara já na extração, não três meses depois, quando o motor tenta testá-lo.
 
 ```python
 class Covenant(BaseModel):
@@ -57,62 +57,62 @@ class Covenant(BaseModel):
     threshold: float
     test_frequency: Literal["quarterly", "annual"]
     cure_period_days: int | None
-    source_clause: str          # verbatim clause, for audit + citations
+    source_clause: str          # cláusula literal, para auditoria e citações
     source_page: int
 
 extraction_chain = prompt_template | llm.with_structured_output(CovenantExtractionResult)
 result = extraction_chain.invoke({"document_text": agreement_text})
 ```
 
-Every extracted covenant carries a `source_page` and the verbatim clause it came from — the same anchor the chat's citations use later (see the [whitepaper](docs/whitepaper.pdf), §4 and §7, for the full extraction and retrieval design).
+Cada covenant extraído carrega uma `source_page` e a cláusula literal de onde veio — a mesma âncora que as citações do chat usam depois (veja o [whitepaper](docs/whitepaper.pdf), §4 e §7, para o desenho completo de extração e busca).
 
-## Tech stack
+## Stack técnica
 
-| Layer | Choice |
+| Camada | Escolha |
 |---|---|
 | API | FastAPI |
-| LLM orchestration | LangChain (structured-output extraction chains, RAG retrieval chain) |
-| Database | PostgreSQL + pgvector — one store for structured covenant data and embeddings |
-| Background jobs | Celery + Redis |
+| Orquestração de LLM | LangChain (chains de extração com saída estruturada, chain de busca para o RAG) |
+| Banco de dados | PostgreSQL + pgvector — um só repositório para dado estruturado e embeddings |
+| Processamento assíncrono | Celery + Redis |
 | Frontend | React + TypeScript |
-| Deployment | Docker Compose |
+| Implantação | Docker Compose |
 
-## Repository structure
+## Estrutura do repositório
 
 ```
 covenant-iq/
-├── api/                    FastAPI app — routes, auth, schemas
-│   ├── extraction/         LangChain chains (agreement + financials)
-│   ├── engine/             compliance engine (config-driven rules)
-│   ├── chat/               RAG retrieval chain
-│   └── models/             SQLAlchemy models
-├── worker/                 Celery tasks (async extraction, re-scoring)
-├── web/                    React + TypeScript dashboard
-├── data/synthetic/         generated demo loans, agreements, statements
+├── api/                    app FastAPI — rotas, autenticação, schemas
+│   ├── extraction/         chains do LangChain (contrato + demonstrativos)
+│   ├── engine/             motor de compliance (regras configuráveis)
+│   ├── chat/               chain de busca do RAG
+│   └── models/             modelos SQLAlchemy
+├── worker/                 tarefas Celery (extração assíncrona, recálculo)
+├── web/                    painel em React + TypeScript
+├── data/synthetic/         contratos, demonstrativos e dados sintéticos de exemplo
 ├── docs/
-│   ├── whitepaper.pdf       full technical whitepaper
+│   ├── whitepaper.pdf       whitepaper técnico completo
 │   ├── architecture.png
 │   └── dashboard.png
 ├── docker-compose.yml
 └── README.md
 ```
 
-## Roadmap
+## Roteiro
 
-- [ ] **v0.1 — Core pipeline:** agreement upload → covenant extraction → manual review → compliance engine → dashboard. Synthetic data only.
-- [ ] **v0.2 — Chat:** RAG retrieval chain over the extracted portfolio, with citations.
-- [ ] **v0.3 — Alerting:** configurable early-warning thresholds, email/webhook delivery.
-- [ ] **v0.4 — Multi-document agreements:** amendments and side letters that modify an original covenant.
-- [ ] **Stretch:** extraction confidence scoring, so the human-review queue prioritizes the extractions most likely to be wrong.
+- [ ] **v0.1 — Pipeline principal:** upload do contrato → extração de covenants → revisão manual → motor de compliance → painel. Só com dados sintéticos.
+- [ ] **v0.2 — Chat:** chain de busca (RAG) sobre a carteira extraída, com citações.
+- [ ] **v0.3 — Alertas:** limites de alerta antecipado configuráveis, envio por e-mail/webhook.
+- [ ] **v0.4 — Contratos com múltiplos documentos:** aditivos e cartas-side que alteram um covenant original.
+- [ ] **Ideia futura:** pontuação de confiança na extração, para a fila de revisão humana priorizar o que tem mais chance de estar errado.
 
-Full design detail — data model, security & governance considerations, and the reasoning behind each decision — is in the [technical whitepaper](docs/whitepaper.pdf).
+O detalhamento completo do projeto — modelo de dados, considerações de segurança e governança, e o raciocínio por trás de cada decisão — está no [whitepaper técnico](docs/whitepaper.pdf).
 
-## License
+## Licença
 
-MIT — see [`LICENSE`](LICENSE).
+MIT — veja [`LICENSE`](LICENSE).
 
 ---
 
 <div align="center">
-<sub>Built as a portfolio project to demonstrate applied LLM/LangChain engineering for financial-services document intelligence. Synthetic data only.</sub>
+<sub>Construído como projeto de portfólio para demonstrar engenharia aplicada de LLM/LangChain em inteligência documental para o mercado financeiro. Somente dados sintéticos.</sub>
 </div>
