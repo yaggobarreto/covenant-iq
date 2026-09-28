@@ -5,16 +5,18 @@
 **Inteligência de compliance de covenants e de carteira de crédito, com IA.**
 Lê contratos de crédito com um LLM, acompanha covenants financeiros em relação aos demonstrativos do tomador ao longo do tempo, e responde perguntas sobre a carteira em linguagem natural — sempre com base nos documentos originais.
 
-[![Status](https://img.shields.io/badge/status-projeto%20de%20portf%C3%B3lio%20em%20est%C3%A1gio%20inicial-c8862f)](#roteiro)
-[![Python](https://img.shields.io/badge/python-3.11%2B-1e2a44)](#stack-t%C3%A9cnica)
+[![Tests](https://img.shields.io/badge/testes-45%20passing-1f9d76)](#como-rodar)
+[![Python](https://img.shields.io/badge/python-3.12-1e2a44)](#stack-t%C3%A9cnica)
 [![LangChain](https://img.shields.io/badge/orquestra%C3%A7%C3%A3o%20de%20LLM-LangChain-1f9d76)](#o-pipeline-de-extra%C3%A7%C3%A3o)
 [![License](https://img.shields.io/badge/licen%C3%A7a-MIT-4c5266)](#licen%C3%A7a)
 
-[Whitepaper (PDF)](docs/whitepaper.pdf) · [Arquitetura](#arquitetura) · [Roteiro](#roteiro)
+[Whitepaper (PDF)](docs/whitepaper.pdf) · [Como rodar](#como-rodar) · [Arquitetura](#arquitetura) · [Roteiro](#roteiro)
 
 </div>
 
 > **Projeto de portfólio, com dados 100% sintéticos.** Todo número, nome de tomador e documento citado neste repositório foi gerado para fins de demonstração. O CovenantIQ não tem nenhuma relação com, e não processa dados de, nenhuma instituição financeira, credor ou cliente real.
+
+> **Estado real da implementação:** a API (FastAPI), as duas chains de extração do LangChain, o motor de compliance, o endpoint de chat (RAG) e o banco de dados são **código real, com 45 testes automatizados passando** — não é só a proposta descrita no whitepaper. O que ainda **não** existe: o painel em React (as imagens abaixo são mockups estáticos, não telas de uma aplicação rodando), o processamento assíncrono via Celery/Redis (a API roda de forma síncrona nesta versão) e o deploy em produção com Postgres/pgvector (a stack padrão é SQLite, e o código já é compatível com Postgres — ver [Stack técnica](#stack-técnica)).
 
 <img src="docs/dashboard.png" alt="Painel de carteira do CovenantIQ — lista de contratos com status de covenant e gráfico de tendência de folga" width="100%">
 
@@ -66,41 +68,83 @@ result = extraction_chain.invoke({"document_text": agreement_text})
 
 Cada covenant extraído carrega uma `source_page` e a cláusula literal de onde veio — a mesma âncora que as citações do chat usam depois (veja o [whitepaper](docs/whitepaper.pdf), §4 e §7, para o desenho completo de extração e busca).
 
+## Como rodar
+
+Requer Python 3.12. Os testes **não** precisam de chave de API — a chamada ao LLM é injetável, e a suíte usa um modelo falso em todos os pontos onde isso importa (veja `tests/fakes.py`).
+
+```bash
+python -m venv .venv
+.venv/Scripts/activate          # no Windows; source .venv/bin/activate no Linux/Mac
+pip install -e ".[dev]"
+
+pytest                          # 45 testes, roda em menos de 1s, sem chave de API
+```
+
+Para rodar a API de verdade (precisa de `OPENAI_API_KEY`):
+
+```bash
+cp .env.example .env            # e preencha OPENAI_API_KEY
+uvicorn app.main:app --reload
+# docs interativas em http://localhost:8000/docs
+```
+
+Para ver o pipeline completo (extração de covenants + extração financeira + motor de compliance) rodando contra um contrato sintético de exemplo, de ponta a ponta, com a API real:
+
+```bash
+python scripts/demo.py
+```
+
+Para rodar com PostgreSQL + pgvector em vez de SQLite:
+
+```bash
+docker compose up
+```
+
 ## Stack técnica
 
-| Camada | Escolha |
-|---|---|
-| API | FastAPI |
-| Orquestração de LLM | LangChain (chains de extração com saída estruturada, chain de busca para o RAG) |
-| Banco de dados | PostgreSQL + pgvector — um só repositório para dado estruturado e embeddings |
-| Processamento assíncrono | Celery + Redis |
-| Frontend | React + TypeScript |
-| Implantação | Docker Compose |
+| Camada | Escolha | Status |
+|---|---|---|
+| API | FastAPI | ✅ implementado, testado |
+| Orquestração de LLM | LangChain (chains de extração com saída estruturada, chain de busca para o RAG) | ✅ implementado, testado |
+| Motor de compliance | Python puro — sem LLM, sem I/O | ✅ implementado, cobertura de teste exaustiva |
+| Banco de dados | SQLAlchemy — SQLite por padrão (dev/testes), PostgreSQL + pgvector suportado via `DATABASE_URL` | ✅ SQLite funcionando · Postgres desenhado, não testado em produção |
+| Busca vetorial | Repositório em memória com similaridade por cosseno, mesma interface que um adaptador pgvector usaria | ✅ implementado, testado |
+| Processamento assíncrono | Celery + Redis | 📋 desenhado no whitepaper, não implementado — a API roda de forma síncrona |
+| Frontend | React + TypeScript | 📋 só existe como mockup estático (`docs/dashboard.png`) |
+| Implantação | Docker Compose (Postgres + API) | ✅ implementado |
 
 ## Estrutura do repositório
 
 ```
 covenant-iq/
-├── api/                    app FastAPI — rotas, autenticação, schemas
-│   ├── extraction/         chains do LangChain (contrato + demonstrativos)
-│   ├── engine/             motor de compliance (regras configuráveis)
-│   ├── chat/               chain de busca do RAG
-│   └── models/             modelos SQLAlchemy
-├── worker/                 tarefas Celery (extração assíncrona, recálculo)
-├── web/                    painel em React + TypeScript
-├── data/synthetic/         contratos, demonstrativos e dados sintéticos de exemplo
+├── app/
+│   ├── main.py              app FastAPI
+│   ├── config.py            configurações (variáveis de ambiente)
+│   ├── db.py, models.py     SQLAlchemy
+│   ├── schemas.py           schemas da API (Pydantic)
+│   ├── extraction/          chains do LangChain (contrato + demonstrativos)
+│   ├── engine/               motor de compliance (Python puro, sem LLM)
+│   ├── retrieval/            busca vetorial + chain de RAG do chat
+│   └── routers/               rotas da API
+├── data/synthetic/          contrato e demonstrativo sintéticos de exemplo
+├── scripts/demo.py           pipeline completo, ponta a ponta, com a API real
+├── tests/                     45 testes — motor de compliance, chains, API
 ├── docs/
-│   ├── whitepaper.pdf       whitepaper técnico completo
+│   ├── whitepaper.pdf         whitepaper técnico completo
 │   ├── architecture.png
 │   └── dashboard.png
-├── docker-compose.yml
+├── docker-compose.yml         Postgres + pgvector + API
+├── Dockerfile
+├── .env.example
 └── README.md
 ```
 
 ## Roteiro
 
-- [ ] **v0.1 — Pipeline principal:** upload do contrato → extração de covenants → revisão manual → motor de compliance → painel. Só com dados sintéticos.
-- [ ] **v0.2 — Chat:** chain de busca (RAG) sobre a carteira extraída, com citações.
+- [x] **v0.1 — Pipeline principal:** upload do contrato → extração de covenants → revisão manual (endpoint de aprovação) → motor de compliance. Só com dados sintéticos.
+- [x] **v0.2 — Chat:** chain de busca (RAG) sobre a carteira extraída, com citações — endpoint funcionando, com busca vetorial em memória.
+- [ ] **Painel de verdade:** ligar o mockup React a essas rotas (hoje `docs/dashboard.png` é só uma imagem estática).
+- [ ] **Processamento assíncrono:** mover a extração para filas (Celery + Redis), tirando-a do caminho síncrono da requisição.
 - [ ] **v0.3 — Alertas:** limites de alerta antecipado configuráveis, envio por e-mail/webhook.
 - [ ] **v0.4 — Contratos com múltiplos documentos:** aditivos e cartas-side que alteram um covenant original.
 - [ ] **Ideia futura:** pontuação de confiança na extração, para a fila de revisão humana priorizar o que tem mais chance de estar errado.

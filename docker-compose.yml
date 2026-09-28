@@ -1,0 +1,30 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: covenant_iq
+      POSTGRES_USER: covenant_iq
+      POSTGRES_PASSWORD: covenant_iq
+    ports:
+      - "5432:5432"
+    volumes:
+      - covenant_iq_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U covenant_iq"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://covenant_iq:covenant_iq@db:5432/covenant_iq
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ports:
+      - "8000:8000"
+
+volumes:
+  covenant_iq_db:
